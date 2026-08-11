@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import time
+import tracemalloc
 
 from solarspatialtools import spatial
 from solarspatialtools.synthirrad.copula import downscale, downscale_multihour, DEFAULT_PARAMS
@@ -8,6 +10,9 @@ from solarspatialtools.synthirrad.copula import downscale, downscale_multihour, 
 def matlab_compare():
     # Compares with the demo results from the original authors' MATLAB code.
     # It also demonstrates the use of the multihour helper function.
+    
+    tracemalloc.start()
+    start_time = time.time()
 
     # Cloud speed and direction in radians, provided as arrays for multihour
     cs = np.array([5, 5, 5, 5, 5, 5])
@@ -33,6 +38,7 @@ def matlab_compare():
     c = downscale_multihour(times, Epos, Npos, cs, cd, mean_csi,
                             DEFAULT_PARAMS, seed=42, scale=scale, noneg=noneg)
 
+
     # Helper to plot the mean
     n_per_hour = times.shape[0]
     hcsi_block = np.repeat(mean_csi, n_per_hour)
@@ -41,6 +47,31 @@ def matlab_compare():
     plt.step(np.arange(hcsi_block.size), hcsi_block, where='post', color='k',
              linewidth=1, linestyle='--')
     plt.legend()
+
+    # Second plot: Input CSI vs Output CSI aggregated hourly mean
+    n_hours = len(mean_csi)
+    n_sites = c.shape[1] if c.ndim > 1 else 1
+    c_reshaped = c.values.reshape(n_hours, n_per_hour, n_sites) if hasattr(c, 'values') else c.reshape(n_hours, n_per_hour, n_sites)
+    # Hourly mean per site, then average across sites
+    output_hourly_mean = c_reshaped.mean(axis=1).mean(axis=1)
+
+    hours = np.arange(1, n_hours + 1)
+
+    plt.figure()
+    plt.plot(hours, mean_csi, marker='o', linewidth=2, label='Input CSI (mean_csi)')
+    plt.plot(hours, output_hourly_mean, marker='s', linewidth=2, linestyle='--', label='Output CSI (hourly mean)')
+    plt.xlabel('Hour')
+    plt.ylabel('CSI')
+    plt.title('Input CSI vs Output Aggregated Hourly Mean CSI')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+
+    end_time = time.time()
+    current_mem, peak_mem = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
+    
+    print(f"Execution time: {end_time - start_time:.4f} seconds")
+    print(f"Current memory usage: {current_mem / 10**6:.4f} MB; Peak memory usage: {peak_mem / 10**6:.4f} MB")
 
     plt.show()
 
